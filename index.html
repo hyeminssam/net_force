@@ -45,6 +45,7 @@
   --book:#FFB84D; --book-bg:#2B2410; --ok:#5FD3A5; --ok-bg:#0F3027; --try:#FFB066; --try-bg:#33230F;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.6}
@@ -119,6 +120,22 @@ input[type=text],input[type=password],input[type=number],select{font:inherit;bor
 .missions li.cur{border:2px solid var(--accent)}
 .missions li.done .t::after{content:" ✓";color:var(--ok)}
 .missions li.locked{opacity:.45}
+.mission{background:var(--panel);border:2px solid var(--accent);border-radius:14px;padding:14px 18px;margin-bottom:14px}
+.mission.done{border-color:var(--ok)}
+.mission.bookm{border-color:var(--book);background:var(--book-bg)}
+.mission h2{margin:4px 0 6px;font-size:1.2rem}
+.mission p{margin:6px 0}
+.mhead{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mnum{font-size:.82rem;font-weight:700;color:var(--accent-ink);background:var(--accent);padding:2px 10px;border-radius:999px}
+.mission.done .mnum{background:var(--ok)}
+.mission.bookm .mnum{background:var(--book);color:#1d1300}
+.mprog{font-size:.85rem;color:var(--muted);font-weight:500}
+.qform{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:1.02rem}
+.qform input{width:5em}
+.fb{padding:8px 10px;border-radius:8px;margin:10px 0 0;font-weight:500}
+.fb.ok{background:var(--ok-bg);color:var(--ok)}
+.fb.try{background:var(--try-bg);color:var(--try)}
+.bkex{border-top:1px dashed var(--book);margin-top:10px;padding-top:6px}
 .alist{list-style:none;margin:0 0 8px;padding:0}
 .alist li{display:flex;align-items:center;gap:8px;padding:4px 0}
 .alist .sw{width:14px;height:14px;border-radius:3px;flex:none}
@@ -233,38 +250,21 @@ footer .btn{font-size:.88rem;color:var(--muted)}
     </div>
 
     <div id="p2main" hidden>
+      <div id="mission" class="mission"></div>
       <div class="stage">
         <canvas id="c2" aria-label="얼음판 위의 상자. 상자에서 시작해 왼쪽·오른쪽·위·아래로 끌면 힘의 화살표가 그려진다."></canvas>
         <p class="stage-msg" id="msg2"></p>
       </div>
-      <div class="controls2">
+      <div class="controls2" id="drawCtl">
         <button class="btn primary" id="runBtn">▶ 힘 작용하기</button>
         <button class="btn" id="homeBtn">↺ 상자 제자리로</button>
         <button class="btn" id="delSelBtn" disabled>선택한 화살표 지우기</button>
-        <button class="btn" id="clearBtn">화살표 모두 지우기</button>
-        <div class="predict">
-          <span>합력 예상</span>
-          <select id="pDir" aria-label="합력의 방향 예상">
-            <option value="">방향</option>
-            <option value="R">오른쪽</option>
-            <option value="L">왼쪽</option>
-            <option value="U">위쪽</option>
-            <option value="D">아래쪽</option>
-            <option value="0">없음</option>
-          </select>
-          <input type="number" id="pN" min="0" max="40" step="1" inputmode="numeric" aria-label="합력의 크기 예상"> N
-        </div>
+        <button class="btn" id="clearBtn">내가 그린 화살표 모두 지우기</button>
       </div>
-      <div class="grid2">
-        <div class="box">
-          <h2>미션</h2>
-          <ol class="missions" id="missions"></ol>
-        </div>
-        <div class="box">
-          <h2>상자에 작용하는 힘</h2>
-          <ul class="alist" id="alist"></ul>
-          <div class="result" id="result"><span class="empty">화살표를 그리고 ▶ 힘 작용하기를 누르면 합력이 나타나요.</span></div>
-        </div>
+      <div class="box" style="margin-top:14px">
+        <h2>상자에 작용하는 힘</h2>
+        <ul class="alist" id="alist"></ul>
+        <div class="result" id="result"></div>
       </div>
       <div class="box sum" style="margin-top:14px">
         <h2>정리하기</h2>
@@ -587,7 +587,6 @@ const COLNAME={'-80':'왼쪽 끝 세로줄','-40':'왼쪽 세로줄','0':'가운
 const ACOL=['fR','fL','f3','f4'];
 const cv2=$('c2');let ctx2=null;
 const p2={sel:-1,arrows:[],box:{x:BX,y:BY,th:0,vx:0,vy:0,w:0},running:false,ran:false,t:0,T:RUN_T,drawing:null};
-let mdone=store.get('mdone',{}); let mmsg={};
 function msg2(t){$('msg2').textContent=t;}
 const Fx=a=>a.reduce((s,x)=>s+(x.ax==='x'?x.n:0),0);
 const Fy=a=>a.reduce((s,x)=>s+(x.ax==='y'?x.n:0),0);
@@ -597,18 +596,18 @@ const torque0=a=>a.reduce((s,x)=>s+(x.ax==='x'?-x.row*x.n:x.sx*x.n),0);
 const lineKey=x=>x.ax==='x'?'x'+x.row:'y'+x.sx;
 const sameLine=a=>a.every(x=>lineKey(x)===lineKey(a[0]));
 const sameAxis=a=>a.every(x=>x.ax===a[0].ax);
-const comparable=a=>a.length>0&&a.every(x=>x.ax==='x')&&sameLine(a);
+const comparable=a=>a.length>0&&a.every(x=>x.ax==='x')&&sameLine(a)&&torque0(a)===0;
 const dirWord=(ax,n)=>ax==='x'?(n>0?'오른쪽':'왼쪽'):(n>0?'아래쪽':'위쪽');
 const lineName=x=>x.ax==='x'?ROWNAME[x.row]:COLNAME[x.sx];
 
-function resetBox(){p2.box={x:BX,y:BY,th:0,vx:0,vy:0,w:0};p2.ran=false;p2.running=false;}
+function resetBox(){p2.box={x:BX,y:BY,th:0,vx:0,vy:0,w:0};p2.ran=false;p2.running=false;p2.aligned=false;}
 
 function aPts(a,idx){
   const b=p2.box,cs=Math.cos(b.th),sn=Math.sin(b.th);
   let k=0;for(let i=0;i<idx;i++){const o=p2.arrows[i];if(lineKey(o)===lineKey(a)&&Math.sign(o.n)===Math.sign(a.n))k++;}
   let x=b.x+a.sx*cs-a.row*sn,y=b.y+a.sx*sn+a.row*cs;
-  if(a.ax==='x'){y+=k*11;return [x,y,x+a.n*G,y,k];}
-  x+=k*11;return [x,y,x,y+a.n*G,k];
+  if(a.ax==='x'){y+=k*18;return [x,y,x+a.n*G,y,k];}
+  x+=k*18;return [x,y,x,y+a.n*G,k];
 }
 function drawBox(c,x,y,th,label){
   c.save();c.translate(x,y);c.rotate(th);
@@ -638,7 +637,7 @@ function draw2(){
   gridBg(c,W2,H2,G,C.ice);
   c.fillStyle=C.wall;c.fillRect(0,0,14,H2);c.fillRect(W2-14,0,14,H2);
   c.save();c.strokeStyle=C['grid-major'];c.lineWidth=2;c.beginPath();c.moveTo(14,LA);c.lineTo(W2-14,LA);c.stroke();c.restore();
-  laneLabel(c,14,'① 내가 그린 힘들을 작용한 상자');
+  laneLabel(c,14,'① 여러 힘을 작용한 상자');
   laneLabel(c,LA+12,'② 합력과 같은 힘 하나만 작용한 상자');
   c.save();c.fillStyle=C.muted;c.font='15px '+FONT;c.textAlign='right';c.textBaseline='alphabetic';
   c.fillText('위에서 내려다본 얼음판 (마찰 없음) · 모눈 1칸 = 1 N',W2-28,H2-12);c.restore();
@@ -651,6 +650,15 @@ function draw2(){
   }
   // ① 상자와 화살표
   drawBox(c,b.x,b.y,b.th,'상자');
+  if(p2.aligned&&a.length){ // 두 힘이 놓인 일직선 표시
+    const [x1,y1]=aPts(a[0],0),hz=a[0].ax==='x';
+    c.save();c.strokeStyle=C.net;c.lineWidth=2;c.setLineDash([10,7]);c.beginPath();
+    if(hz){c.moveTo(20,y1);c.lineTo(W2-20,y1);}else{c.moveTo(x1,40);c.lineTo(x1,LA-10);}
+    c.stroke();c.setLineDash([]);c.fillStyle=C.net;c.font='700 17px '+FONT;
+    if(hz){c.textAlign='left';c.textBaseline='bottom';c.fillText('두 힘이 일직선 위에 놓였어요',30,y1-6);}
+    else{c.textAlign='left';c.textBaseline='middle';c.fillText('두 힘이 일직선 위에 놓였어요',x1+12,60);}
+    c.restore();
+  }
   a.forEach((ar,i)=>{
     const [x1,y1,x2,y2,k]=aPts(ar,i),col=C[ar.col];
     if(i===p2.sel){c.save();c.globalAlpha=.35;arrow(c,x1,y1,x2,y2,C.accent,18);c.restore();}
@@ -666,12 +674,12 @@ function draw2(){
   // ② 합력 하나만 받은 상자
   c.save();c.font='18px '+FONT;c.textAlign='center';c.textBaseline='middle';c.fillStyle=C.muted;
   if(!(p2.ran||p2.running)){
-    c.fillText(a.length?'▶ 힘 작용하기를 누르면, 합력과 같은 힘 하나만 받은 상자가 여기에서 함께 움직여요.':'위쪽 상자에 화살표를 그려 보세요.',W2/2,BY2);
+    c.fillText(lane2Hint(),W2/2,BY2);
     c.restore();return;
   }
   if(!cmp){
     if(torque0(a)!==0){
-      c.fillText('힘들이 일직선 위에 있지 않아 상자가 돌았어요.',W2/2,BY2-14);
+      c.fillText(p2.aligned?'상자가 돌다가 두 힘이 일직선 위에 놓이자 멈췄어요.':'힘들이 일직선 위에 있지 않아 상자가 돌았어요.',W2/2,BY2-14);
       c.fillText('이런 경우는 합력 하나와 비교하지 않아요.',W2/2,BY2+18);
     }else{
       c.fillText('가로 방향 화살표들이 모두 같은 줄(일직선) 위에 있을 때 합력 하나와 비교할 수 있어요.',W2/2,BY2-14);
@@ -690,17 +698,23 @@ function draw2(){
     c.save();c.fillStyle=C.net;c.font='700 18px '+FONT;c.textAlign='center';c.textBaseline='middle';c.fillText('합력 0 N (힘이 없음)',b.x,BY2+BH/2+18);c.restore();
   }
 }
+function torqueNow(){
+  const b=p2.box,cs=Math.cos(b.th),sn=Math.sin(b.th);let tau=0;
+  p2.arrows.forEach(f=>{const rx=f.sx*cs-f.row*sn,ry=f.sx*sn+f.row*cs;tau+=f.ax==='x'?-ry*f.n:rx*f.n;});
+  return tau;
+}
 function step2(dt){
   const b=p2.box,a=p2.arrows,fx=Fx(a),fy=Fy(a),I=(BW*BW+BH*BH)/12;
   const n=4,h=dt/n;
   for(let i=0;i<n;i++){
-    const cs=Math.cos(b.th),sn=Math.sin(b.th);
-    let tau=0;
-    a.forEach(f=>{const rx=f.sx*cs-f.row*sn,ry=f.sx*sn+f.row*cs;tau+=f.ax==='x'?-ry*f.n:rx*f.n;});
+    const tau=torqueNow();
     b.vx+=fx*ACC*h;b.x+=b.vx*h;b.vy+=fy*ACC*h;b.y+=b.vy*h;
-    b.w+=tau*ACC/I*h;b.th+=b.w*h;
+    b.w+=tau*ACC/I*h;
+    if(p2.settle)b.w*=Math.exp(-2.6*h); // 바닥과의 약한 저항: 돌다가 두 힘이 일직선이 되면 멈춰요
+    b.th+=b.w*h;
   }
   p2.t+=dt;
+  if(p2.settle&&p2.t>1.2&&Math.abs(b.w)<.02&&Math.abs(torqueNow())<8){b.w=0;p2.aligned=true;p2.running=false;p2.ran=true;afterRun();return;}
   if(p2.t>=p2.T){p2.running=false;p2.ran=true;afterRun();}
 }
 function run(){
@@ -709,7 +723,9 @@ function run(){
   resetBox();
   // 상자와 화살표가 벽이나 칸 경계를 넘지 않을 만큼만 관찰 시간을 정해요
   const a=p2.arrows,fx=Fx(a),fy=Fy(a),F=Math.hypot(fx,fy);
-  p2.T=RUN_T;
+  p2.T=RUN_T;p2.aligned=false;
+  p2.settle=isZero(a)&&torque0(a)!==0; // 합력 0 + 돌림: 일직선이 될 때까지 돌다가 멈춤
+  if(p2.settle)p2.T=12;
   if(F){
     const ux=fx/F,uy=fy/F;
     let ext=Math.abs(ux)*BW/2+Math.abs(uy)*BH/2+10;
@@ -740,60 +756,152 @@ function afterRun(){
   }
   if(tq===0&&fx&&fy) html+='<div class="empty">가로 힘과 세로 힘이 함께 남으면 합력은 비스듬한 방향이 돼요. 이런 합력 구하기는 나중에 배워요.</div>';
   if(zero&&tq===0) html+='<div style="color:var(--ok);font-weight:700">상자가 움직이지 않아요. 힘의 평형이에요.</div>';
-  if(tq!==0&&zero) html+='<div style="color:var(--try);font-weight:700">상자가 제자리에서 돌았어요! 크기가 같고 방향이 반대인 힘이라도 일직선 위에 있지 않으면 상자가 돌아요. 힘의 평형이 아니에요.</div>';
+  if(tq!==0&&zero) html+='<div style="color:var(--try);font-weight:700">상자가 돌다가, 두 힘이 일직선 위에 놓이자 멈췄어요! 크기가 같고 방향이 반대여도 일직선 위에 있지 않으면 평형이 아니에요. 두 힘이 일직선 위에 놓여야 비로소 평형을 이뤄요.</div>';
   else if(tq!==0) html+='<div style="color:var(--try)">상자가 돌면서 움직였어요. 힘들이 일직선 위에 있지 않았어요.</div>';
   if(comparable(a)) html+=fx?'<div style="color:var(--net);font-weight:700">①과 ② 상자가 똑같이 움직였어요. 일직선 위의 여러 힘은 그 합력 하나와 같은 효과를 내요.</div>'
                              :'<div style="color:var(--net);font-weight:700">①과 ② 상자 모두 움직이지 않았어요. 합력이 0 N이에요.</div>';
   $('result').innerHTML=html;
-  msg2(zero&&tq===0?'상자가 꼼짝하지 않았어요.':tq!==0&&zero?'상자가 제자리에서 돌았어요!':tq!==0?'상자가 돌면서 움직였어요.':'상자가 움직였어요.');
-  checkMission();
+  msg2(zero&&tq===0?'상자가 꼼짝하지 않았어요.':tq!==0&&zero?'상자가 돌다가 두 힘이 일직선이 되자 멈췄어요!':tq!==0?'상자가 돌면서 움직였어요.':'상자가 움직였어요.');
+  checkDraw();if(cur()&&cur().kind==='book'&&!book.shown){book.shown=true;renderMission();}
 }
 
 /* 미션 */
-const two=a=>a.length!==2?'화살표를 2개 그려요.':!sameAxis(a)?'두 화살표를 모두 가로로, 또는 모두 세로로 그려요.':null;
-const MISSIONS=[
-  {id:'m1',t:'같은 방향의 두 힘',d:'같은 줄에 같은 방향으로 화살표 2개를 그려요. 합력을 예상해 적고 ▶ 힘 작용하기를 눌러요.',pred:true,
-   check:a=>two(a)||(Math.sign(a[0].n)!==Math.sign(a[1].n)?'두 화살표의 방향을 같게 그려요.':!sameLine(a)?'두 화살표를 같은 줄에 그려요.':true)},
-  {id:'m2',t:'반대 방향의 두 힘',d:'같은 줄에 반대 방향으로, 크기가 서로 다른 화살표 2개를 그려요. 합력을 예상해 적고 작용시켜요.',pred:true,
-   check:a=>two(a)||(Math.sign(a[0].n)===Math.sign(a[1].n)?'두 화살표의 방향을 반대로 그려요.':Math.abs(a[0].n)===Math.abs(a[1].n)?'두 화살표의 크기를 서로 다르게 그려요.':!sameLine(a)?'두 화살표를 같은 줄에 그려요.':true)},
-  {id:'m3',t:'상자가 움직이지 않게 하기',d:'화살표 2개를 그려서, 힘을 작용해도 상자가 꼼짝하지 않게 만들어요.',
-   check:a=>a.length!==2?'화살표를 2개 그려요.':!isZero(a)?'상자가 움직였어요. 두 힘의 크기와 방향을 살펴보세요.':torque0(a)!==0?'상자가 제자리에서 돌았어요! 두 화살표가 한 줄 위에 있는지 살펴보세요.':true,
-   ok:'두 힘이 평형을 이루어 상자가 움직이지 않았어요!'},
-  {id:'mr',t:'평형이 깨지는 경우 찾기',d:'크기가 같고 방향이 반대인 화살표 2개를, 일직선이 되지 않게 그려 보세요. 위아래 방향으로 그려도 좋아요. 상자는 어떻게 될까요?',
-   check:a=>two(a)||(Math.sign(a[0].n)===Math.sign(a[1].n)?'두 화살표의 방향을 반대로 그려요.':Math.abs(a[0].n)!==Math.abs(a[1].n)?'두 화살표의 크기를 같게 그려요.':sameLine(a)?'두 화살표가 일직선 위에 있어서 평형을 이뤘어요. 서로 다른 줄에 그려 보세요.':true),
-   ok:'크기가 같고 방향이 반대여도 일직선 위에 있지 않으면 상자가 돌아요. 힘의 평형이 아니에요!'},
-  {id:'m4',t:'도전: 화살표 3개로 평형 만들기',d:'화살표 3개로 상자가 움직이지도, 돌지도 않게 만들어요.',
-   check:a=>a.length!==3?'화살표를 3개 그려요.':!isZero(a)?'상자가 움직였어요. 방향마다 힘의 합을 비교해 보세요.':torque0(a)!==0?'상자가 돌았어요. 화살표를 그리는 줄을 바꿔 보세요.':true,
-   ok:'세 힘으로도 평형을 만들었어요!'}
+const QN=2; // 합력 문제: 미션마다 맞혀야 하는 문제 수
+const MS=[
+  {id:'q1',kind:'quiz',same:true,t:'같은 방향으로 작용하는 두 힘',d:'상자에 같은 방향으로 두 힘이 작용하고 있어요. 합력의 방향과 크기를 구해 보세요.'},
+  {id:'q2',kind:'quiz',same:false,t:'반대 방향으로 작용하는 두 힘',d:'상자에 반대 방향으로 두 힘이 작용하고 있어요. 합력의 방향과 크기를 구해 보세요.'},
+  {id:'bal',kind:'draw',given:1,max:1,t:'상자가 움직이지 않게 하기',d:'빨간 화살표 하나가 주어졌어요. 화살표 <b>1개</b>를 더 그려서, ▶ 힘 작용하기를 눌렀을 때 상자가 꼼짝하지 않게 만들어요.'},
+  {id:'book',kind:'book',t:'평형이 깨지는 경우'},
+  {id:'ch',kind:'draw',given:0,max:3,t:'도전! 화살표 3개로 평형 만들기',d:'화살표 <b>3개</b>를 그려서 상자가 움직이지도, 돌지도 않게 만들어요.'}
 ];
-function curMission(){return MISSIONS.find(m=>!mdone[m.id]);}
-function checkMission(){
-  const m=curMission(); if(!m) return;
-  const a=p2.arrows; let r=m.check(a);
-  if(r===true&&m.pred){
-    const dir=$('pDir').value,nv=$('pN').value;
-    const ax=a[0].ax,F=ax==='x'?Fx(a):Fy(a);
-    const want=!F?'0':ax==='x'?(F>0?'R':'L'):(F>0?'D':'U');
-    if(!dir||(dir!=='0'&&nv==='')) r='합력의 방향과 크기를 먼저 예상해 적고 다시 작용시켜 봐요.';
-    else if(dir!==want||(dir!=='0'&&Number(nv)!==Math.abs(F))) r='예상과 달라요. 결과를 보고 합력을 어떻게 구하는지 생각해 본 뒤, 화살표를 새로 그려 다시 도전해요.';
+let mstep=store.get('mstep',0), qcnt=store.get('qcnt',0);
+let quiz=null, fb=null, mOk=false, book={shown:false};
+const cur=()=>MS[mstep]||null;
+const rnd=(a,b)=>a+Math.floor(Math.random()*(b-a+1));
+const pickR=arr=>arr[Math.floor(Math.random()*arr.length)];
+const SXS=[-80,-40,0,40,80];
+const canDraw=()=>{const m=cur();return !m||(m.kind==='draw'&&!mOk);};
+const maxArrows=()=>{const m=cur();return !m?MAXA:m.kind==='draw'?m.given+m.max:0;};
+
+function newQuiz(same){
+  const row=0;let a,b; // 가운데 줄: 상자가 돌지 않고 똑바로 움직여요
+  if(same){const d=pickR([1,-1]);a=rnd(1,5)*d;b=rnd(1,5)*d;}
+  else{do{a=rnd(1,6);b=rnd(1,6);}while(a===b);b=-b;if(Math.random()<.5){a=-a;b=-b;}}
+  let sa=0,sb=0; // 같은 방향: 두 화살표 모두 상자 중심에서 시작(위아래로 살짝 어긋나게)
+  if(!same&&Math.random()<.5){ // 반대 방향: 중심에서 양쪽으로, 또는 양 끝에서 바깥쪽으로
+    sa=a>0?BW/2:-BW/2; sb=b>0?BW/2:-BW/2;
   }
-  if(r===true){mdone[m.id]=true;$('pDir').value='';$('pN').value='';store.set('mdone',mdone);mmsg[m.id]={ok:true,t:m.ok||'성공! 예상한 합력이 맞았어요.'};
-    const nx=curMission(); if(nx) toast('미션 성공! 다음 미션: '+nx.t); else toast('미션을 모두 해냈어요! 정리하기를 채워 보세요.');
-  } else mmsg[m.id]={ok:false,t:r};
-  renderMissions();
+  p2.arrows=[{sx:sa,row,n:a,ax:'x',col:'fR',fixed:true},{sx:sb,row,n:b,ax:'x',col:'f3',fixed:true}];
+  quiz={tries:0,done:false};
 }
-function renderMissions(){
-  const cur=curMission();
-  $('missions').innerHTML=MISSIONS.map(m=>{
-    const cls=mdone[m.id]?'done':m===cur?'cur':'locked';
-    const s=mmsg[m.id]?`<p class="s ${mmsg[m.id].ok?'ok':'try'}">${mmsg[m.id].t}</p>`:'';
-    return `<li class="${cls}"><div class="t">${m.t}</div><p class="d">${m.d}</p>${s}</li>`;
-  }).join('');
+function givenArrow(){
+  if(Math.random()<.65) return {ax:'x',row:pickR(ROWS),sx:pickR(SXS),n:rnd(2,5)*pickR([1,-1]),col:'fL',fixed:true};
+  return {ax:'y',sx:pickR([-40,0,40]),row:0,n:rnd(2,4)*pickR([1,-1]),col:'fL',fixed:true};
+}
+function setupMission(){
+  resetBox();p2.sel=-1;fb=null;mOk=false;book={shown:false};$('delSelBtn').disabled=true;
+  const m=cur();
+  if(!m) p2.arrows=p2.arrows.filter(x=>!x.fixed);
+  else if(m.kind==='quiz') newQuiz(m.same);
+  else if(m.kind==='draw') p2.arrows=m.given?[givenArrow()]:[];
+  else p2.arrows=[];
+  $('result').innerHTML='<span class="empty">'+(m&&m.kind==='quiz'?'답을 확인하면 합력이 나타나요.':'▶ 힘 작용하기를 누르면 합력이 나타나요.')+'</span>';
+  renderMission();renderArrows();
+  msg2(!m||m.kind==='draw'?'상자 위의 한 점에서 시작해 왼쪽·오른쪽·위·아래로 끌어 화살표를 그려요.':'');
+}
+function nextMission(){
+  mstep++;qcnt=0;store.set('mstep',mstep);store.set('qcnt',0);setupMission();
+  const m=cur();toast(m?'다음 미션: '+m.t:'미션을 모두 해냈어요! 아래 정리하기를 채워 보세요.');
+  $('mission').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function lane2Hint(){
+  const m=cur();
+  if(m&&m.kind==='quiz') return '답을 확인하면, 합력과 같은 힘 하나만 받은 상자가 여기에서 함께 움직여요.';
+  if(m&&m.kind==='book') return '▶ 상자로 확인하기를 눌러 보세요.';
+  return p2.arrows.length?'▶ 힘 작용하기를 누르면, 합력과 같은 힘 하나만 받은 상자가 여기에서 함께 움직여요.':'위쪽 상자에 화살표를 그려 보세요.';
+}
+
+function renderMission(){
+  const box=$('mission'),m=cur();
+  $('drawCtl').hidden=!canDraw()&&!(m&&m.kind==='draw');
+  if(!m){
+    box.className='mission done';
+    box.innerHTML='<div class="mhead"><span class="mnum">미션 완료</span></div><h2>🎉 미션을 모두 해냈어요!</h2><p>이제 화살표를 자유롭게 그려 실험해 보고, 아래 「정리하기」를 채워요.</p>';
+    return;
+  }
+  box.className='mission'+(m.kind==='book'?' bookm':'');
+  let h=`<div class="mhead"><span class="mnum">미션 ${mstep+1} / ${MS.length}</span>`+
+        (m.kind==='quiz'?`<span class="mprog">문제 ${Math.min(qcnt+1,QN)} / ${QN}</span>`:'')+`</div><h2>${m.kind==='book'?'📖 ':''}${m.t}</h2>`;
+  if(m.kind==='quiz'){
+    h+=`<p>${m.d}</p>`;
+    if(!quiz.done){
+      h+=`<div class="qform"><span>합력:</span>
+        <select id="qDir" aria-label="합력의 방향"><option value="">방향</option><option value="R">오른쪽</option><option value="L">왼쪽</option></select>
+        <input type="number" id="qN" min="0" max="20" step="1" inputmode="numeric" aria-label="합력의 크기"> N
+        <button class="btn primary" id="qGo">확인하기</button></div>`;
+    }
+  }else if(m.kind==='draw'){
+    h+=`<p>${m.d}</p>`;
+  }else{
+    h+=`<p>크기가 같고 방향이 반대인 두 힘이 <b>일직선 위에 있지 않으면</b> 상자는 어떻게 될까요? 먼저 예상해 본 뒤 확인해요.</p>
+        <div class="qform"><button class="btn primary" id="bkGo">▶ 상자로 확인하기</button>${book.shown?'<button class="btn" id="bkAgain">다른 경우도 보기</button>':''}</div>`;
+    if(book.shown) h+=`<div class="bkex"><p>두 힘의 크기가 같고 방향이 반대여도, 일직선 위에 있지 않으면 상자가 <b>제자리에서 돌아요.</b> 힘의 평형이 아니에요.</p>\n        <p>상자는 돌다가 <b>두 힘이 일직선 위에 놓이는 순간 멈춰요.</b> 일직선이 되고 나서야 평형을 이루는 거예요.</p>
+        <p>그래서 두 힘이 평형을 이루려면 ① <b>일직선 위에서</b> ② <b>크기가 같고</b> ③ <b>방향이 반대</b>여야 해요.</p></div>`;
+  }
+  if(fb) h+=`<p class="fb ${fb.ok?'ok':'try'}">${fb.t}</p>`;
+  if(m.kind==='quiz'&&quiz.done) h+=`<div class="qform"><button class="btn primary" id="qNext">${qcnt>=QN?'다음 미션으로 ▶':fb&&fb.ok?'다음 문제 ▶':'새 문제 풀기 ▶'}</button></div>`;
+  if(m.kind==='draw'&&mOk) h+=`<div class="qform"><button class="btn primary" id="mNext">다음 미션으로 ▶</button></div>`;
+  if(m.kind==='book'&&book.shown) h+=`<div class="qform"><button class="btn primary" id="mNext">이해했어요, 다음 미션으로 ▶</button></div>`;
+  box.innerHTML=h;
+  const on=(id,f)=>{const el=$(id);if(el)el.addEventListener('click',f);};
+  on('qGo',submitQuiz);on('qNext',()=>{if(qcnt>=QN)nextMission();else setupMission();});
+  on('mNext',nextMission);on('bkGo',()=>bookDemo(0));on('bkAgain',()=>bookDemo(1));
+  const qn=$('qN');if(qn)qn.addEventListener('keydown',e=>{if(e.key==='Enter')submitQuiz();});
+}
+function submitQuiz(){
+  if(p2.running) return;
+  const m=cur(),a=p2.arrows,F=Fx(a),want=F>0?'R':'L';
+  const dir=$('qDir').value,nv=$('qN').value;
+  if(!dir||nv===''){fb={ok:false,t:'합력의 방향과 크기를 모두 적어요.'};renderMission();return;}
+  const okDir=dir===want,okN=Number(nv)===Math.abs(F);
+  if(okDir&&okN){
+    qcnt++;store.set('qcnt',qcnt);quiz.done=true;
+    fb={ok:true,t:`정답이에요! 합력은 ${dirWord('x',F)} ${Math.abs(F)} N이에요. 아래에서 두 상자가 똑같이 움직이는지 확인해 보세요.`};
+    run();renderMission();return;
+  }
+  quiz.tries++;
+  let hint;
+  if(!okDir) hint=m.same?'두 화살표가 어느 쪽을 가리키는지 다시 살펴봐요.':'두 힘 중 어느 쪽 힘이 더 큰지 살펴봐요.';
+  else hint=m.same?'두 힘이 같은 방향으로 함께 밀고 있어요. 크기를 다시 생각해 봐요.':'두 힘이 서로 반대쪽으로 밀고 있어요. 크기를 다시 생각해 봐요.';
+  if(quiz.tries>=2){
+    quiz.done=true;
+    fb={ok:false,t:`아쉬워요. 합력은 ${dirWord('x',F)} ${Math.abs(F)} N이에요. 아래 결과에서 어떻게 구하는지 확인하고, 새 문제에 도전해요.`};
+    run();
+  } else fb={ok:false,t:'다시 생각해 봐요. '+hint};
+  renderMission();
+}
+function bookDemo(alt){
+  const n=rnd(2,4),useY=alt?!book.lastY:Math.random()<.5;book.lastY=useY;
+  p2.arrows=useY
+    ?[{ax:'y',sx:-80,row:0,n:n,col:'fR',fixed:true},{ax:'y',sx:80,row:0,n:-n,col:'fL',fixed:true}]
+    :[{ax:'x',sx:0,row:-40,n:n,col:'fR',fixed:true},{ax:'x',sx:0,row:40,n:-n,col:'fL',fixed:true}];
+  renderArrows();run();
+}
+function checkDraw(){
+  const m=cur();if(!m||m.kind!=='draw'||mOk) return;
+  const a=p2.arrows,mine=a.filter(x=>!x.fixed).length;
+  let t;
+  if(mine!==m.max) t=`화살표를 ${m.max}개 그려요.`;
+  else if(!isZero(a)) t=m.given?'상자가 움직였어요. 주어진 빨간 화살표와 크기·방향을 비교해 보세요.':'상자가 움직였어요. 방향마다 힘의 합을 비교해 보세요.';
+  else if(torque0(a)!==0) t=m.given?'상자가 제자리에서 돌았어요! 주어진 화살표와 같은 줄(일직선) 위에 그렸는지 살펴보세요.':'상자가 돌았어요. 화살표를 그리는 줄을 바꿔 보세요.';
+  if(t){fb={ok:false,t};}
+  else{mOk=true;fb={ok:true,t:m.given?'성공! 두 힘이 일직선 위에서 크기가 같고 방향이 반대라서 평형을 이루었어요.':'성공! 세 힘으로도 평형을 만들었어요.'};toast('미션 성공!');}
+  renderMission();
 }
 function renderArrows(){
   const ul=$('alist');
-  if(!p2.arrows.length){ul.innerHTML='<li class="empty">상자 위의 한 점에서 시작해 왼쪽·오른쪽·위·아래로 끌어 보세요. (최대 4개) 그린 화살표를 누르면 골라서 지울 수 있어요.</li>';return;}
-  ul.innerHTML=p2.arrows.map((a,i)=>`<li class="pick${i===p2.sel?' sel':''}" data-i="${i}" tabindex="0"><span class="sw" style="background:${C[a.col]}"></span>${dirWord(a.ax,a.n)} ${Math.abs(a.n)} N <span class="empty">(${lineName(a)})</span><button data-del="${i}" aria-label="이 화살표 지우기">지우기</button></li>`).join('');
+  if(!p2.arrows.length){ul.innerHTML='<li class="empty">'+(canDraw()?'상자 위의 한 점에서 시작해 왼쪽·오른쪽·위·아래로 끌어 보세요. 그린 화살표를 누르면 골라서 지울 수 있어요.':'아직 작용하는 힘이 없어요.')+'</li>';return;}
+  ul.innerHTML=p2.arrows.map((a,i)=>`<li class="pick${i===p2.sel?' sel':''}" data-i="${i}" tabindex="0"><span class="sw" style="background:${C[a.col]}"></span>${dirWord(a.ax,a.n)} ${Math.abs(a.n)} N <span class="empty">(${a.fixed?'주어진 힘 · ':''}${lineName(a)})</span>${a.fixed?'':`<button data-del="${i}" aria-label="이 화살표 지우기">지우기</button>`}</li>`).join('');
   ul.querySelectorAll('li[data-i]').forEach(li=>{
     const pick=()=>selectArrow(+li.dataset.i===p2.sel?-1:+li.dataset.i);
     li.addEventListener('click',e=>{if(!e.target.closest('[data-del]'))pick();});
@@ -802,11 +910,12 @@ function renderArrows(){
   ul.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>deleteArrow(+b.dataset.del)));
 }
 function selectArrow(i){
+  if(i>=0&&p2.arrows[i]&&p2.arrows[i].fixed){p2.sel=-1;$('delSelBtn').disabled=true;renderArrows();msg2('주어진 화살표는 고르거나 지울 수 없어요.');return;}
   p2.sel=i;$('delSelBtn').disabled=i<0;renderArrows();
   if(i>=0)msg2('화살표를 골랐어요. 「선택한 화살표 지우기」나 Delete 키로 지울 수 있어요.');
 }
 function deleteArrow(i){
-  if(i<0||i>=p2.arrows.length) return;
+  if(i<0||i>=p2.arrows.length||p2.arrows[i].fixed) return;
   p2.arrows.splice(i,1);p2.sel=-1;$('delSelBtn').disabled=true;arrowsChanged();msg2('화살표를 지웠어요.');
 }
 function segDist(p,x1,y1,x2,y2){
@@ -815,11 +924,12 @@ function segDist(p,x1,y1,x2,y2){
 }
 function hitArrow(p){
   let best=-1,bd=14;
-  p2.arrows.forEach((a,i)=>{const [x1,y1,x2,y2]=aPts(a,i),d=segDist(p,x1,y1,x2,y2);if(d<bd){bd=d;best=i;}});
+  p2.arrows.forEach((a,i)=>{if(a.fixed)return;const [x1,y1,x2,y2]=aPts(a,i),d=segDist(p,x1,y1,x2,y2);if(d<bd){bd=d;best=i;}});
   return best;
 }
 function arrowsChanged(){
   if(p2.ran||p2.running)resetBox();
+  if(cur()&&cur().kind==='draw'&&fb&&!fb.ok){fb=null;renderMission();}
   $('result').innerHTML='<span class="empty">▶ 힘 작용하기를 누르면 합력이 나타나요.</span>';
   renderArrows();
 }
@@ -827,14 +937,15 @@ function arrowsChanged(){
 /* 그리기 조작 */
 cv2.addEventListener('pointerdown',e=>{
   if(p2.running) return;
+  if(!canDraw()){const m=cur();msg2(m&&m.kind==='draw'?'미션 성공! 위의 「다음 미션으로」를 눌러요.':'이 미션에서는 화살표를 그리지 않아요. 위의 미션 안내를 따라 해요.');return;}
   const p=toLocal(cv2,e,W2,H2);
-  const hit=hitArrow(p);
+  const hit=hitArrow(p),MX=maxArrows();
   const lx0=p.x-BX,ly0=p.y-BY,onBox=!p2.ran&&Math.abs(lx0)<=BW/2+16&&Math.abs(ly0)<=BH/2+16;
-  if(hit>=0&&(!onBox||p2.arrows.length>=MAXA)){selectArrow(hit===p2.sel?-1:hit);return;}
+  if(hit>=0&&(!onBox||p2.arrows.length>=MX)){selectArrow(hit===p2.sel?-1:hit);return;}
   if(p2.ran) resetBox();
   const lx=p.x-BX,ly=p.y-BY;
   if(Math.abs(lx)>BW/2+16||Math.abs(ly)>BH/2+16){if(p2.sel>=0)selectArrow(-1);msg2('상자 위의 한 점에서 시작해 끌어야 화살표가 그려져요. 화살표를 누르면 고를 수 있어요.');return;}
-  if(p2.arrows.length>=MAXA){msg2('화살표는 4개까지 그릴 수 있어요. 화살표를 눌러 고른 뒤 지우고 다시 그려요.');return;}
+  if(p2.arrows.length>=MX){msg2(cur()?`이 미션에서는 화살표를 ${cur().max}개만 그려요. 화살표를 눌러 고른 뒤 지우고 다시 그려요.`:'화살표는 4개까지 그릴 수 있어요. 화살표를 눌러 고른 뒤 지우고 다시 그려요.');return;}
   const row=ROWS.reduce((b,r)=>Math.abs(r-ly)<Math.abs(b-ly)?r:b,ROWS[0]);
   const sx=clamp(Math.round(lx/G)*G,-BW/2,BW/2);
   p2.drawing={sx,row,n:0,ax:'x',hit};msg2('');
@@ -859,9 +970,9 @@ function endDraw(){
   arrowsChanged();
 }
 cv2.addEventListener('pointerup',endDraw);cv2.addEventListener('pointercancel',()=>{p2.drawing=null;});
-$('runBtn').addEventListener('click',run);
+$('runBtn').addEventListener('click',()=>{if(canDraw())run();});
 $('homeBtn').addEventListener('click',()=>{resetBox();msg2('');});
-$('clearBtn').addEventListener('click',()=>{p2.arrows=[];p2.sel=-1;$('delSelBtn').disabled=true;arrowsChanged();msg2('');});
+$('clearBtn').addEventListener('click',()=>{p2.arrows=p2.arrows.filter(x=>x.fixed);p2.sel=-1;$('delSelBtn').disabled=true;arrowsChanged();msg2('');});
 $('delSelBtn').addEventListener('click',()=>deleteArrow(p2.sel));
 document.addEventListener('keydown',e=>{
   if($('p2').hidden||p2.sel<0||p2.running) return;
@@ -909,12 +1020,12 @@ function renderBook2(announce){
 /* 잠금 */
 function setUnlocked(v){
   $('lock').hidden=v;$('p2main').hidden=!v;$('lockIcon').textContent=v?'':'🔒';
-  if(v){resize();renderArrows();renderMissions();if(books.sumDone)checkSum(false);}
+  if(v){resize();setupMission();if(books.sumDone)checkSum(false);}
 }
 $('unlockBtn').addEventListener('click',tryUnlock);
 $('code').addEventListener('keydown',e=>{if(e.key==='Enter')tryUnlock();});
 function tryUnlock(){
-  if($('code').value.trim()===UNLOCK_CODE){store.set('unlocked',true);$('lockMsg').textContent='';setUnlocked(true);msg2('상자 위의 한 점에서 시작해 왼쪽이나 오른쪽으로 끌어 화살표를 그려요.');}
+  if($('code').value.trim()===UNLOCK_CODE){store.set('unlocked',true);$('lockMsg').textContent='';setUnlocked(true);}
   else $('lockMsg').textContent='코드가 맞지 않아요. 선생님께 확인하세요.';
 }
 
